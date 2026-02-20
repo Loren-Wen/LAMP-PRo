@@ -203,7 +203,6 @@ def predict(model, dataloader, device, save_to_csv=None, dataset_name=None):
             "probability": [list(prob) for prob in probabilities]
         })
         df.to_csv(save_to_csv, index=False)
-        print(f"[✅] Predictions saved to {save_to_csv}")
 
     return predictions, probabilities
 
@@ -261,4 +260,5 @@ if __name__ == '__main__':
         preds, probs = predict(
             NeuralNetwork, test_loader, device, save_to_csv=test_save_path, dataset_name=dataset_name
         )
+
         evaluate(test_save_path)
