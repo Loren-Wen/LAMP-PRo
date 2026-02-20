@@ -175,7 +175,6 @@ if __name__ == '__main__':
                 "probability": [list(prob) for prob in probabilities]
             })
             df.to_csv(save_to_csv, index=False)
-            print(f"[✅] Predictions saved to {save_to_csv}")
 
         return predictions, probabilities
     
