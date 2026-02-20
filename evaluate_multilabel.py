@@ -135,9 +135,9 @@ def evaluate(path):
     print("")
 
 if __name__ == "__main__":
-	files=[r"/home/nimishag/DNABinding/predictions/predictions_TEST474_FULL.csv",
-	      r"/home/nimishag/DNABinding/predictions/predictions_DRBP206_FULL.csv",
-	      r"/home/nimishag/DNABinding/predictions/predictions_PDB255_FULL.csv",
-	       r"/home/nimishag/DNABinding/predictions/predictions_EZL_FULL.csv"]
+	files=[r"/predictions_TEST474_FULL.csv",
+	      r"/predictions_DRBP206_FULL.csv",
+	      r"/predictions_PDB255_FULL.csv",
+	       r"/predictions_EZL_FULL.csv"]
 	for path in files:
 	    evaluate(path)
