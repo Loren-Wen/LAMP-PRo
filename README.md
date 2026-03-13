@@ -1,5 +1,5 @@
 # LAMP-PRo
-Code for the paper "LAMP-PRo: Label-aware Attention for Multi-label Prediction of DNA- and RNA-binding Proteins using Protein Language Models"
+Code for the paper "LAMP-PRo: Label-aware Attention for Multi-label Prediction of DNA- and RNA-binding Proteins using Protein Language Model"
 
 1. Run Embeddings.py to get the embedding.
 2. Train the model by running Training.py.
