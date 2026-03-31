@@ -89,9 +89,9 @@ def save_embeddings_to_disk(
 
     # Determine the directory path based on the split name
     if split_name in ["train", "test"]:
-        save_dir = os.path.expanduser(f"Lamp/embeddings/training/{split_name}")
+        save_dir = os.path.expanduser(f"/workspace/LAMP-PRo/Lamp/embeddings/training/{split_name}")
     else:
-        save_dir = os.path.expanduser(f"Lamp/embeddings/testing/{split_name}")
+        save_dir = os.path.expanduser(f"/workspace/LAMP-PRo/Lamp/embeddings/testing/{split_name}")
     
     os.makedirs(save_dir, exist_ok=True)
 
@@ -139,8 +139,8 @@ if __name__ == '__main__':
     model.eval()
 
     # Generate Embeddings for Train Datasets
-    train_data = pd.read_csv('Lamp/Training_with_Label_shuffled.csv')
-    test_data = pd.read_csv('Lamp/Validation_with_Label_shuffled.csv')
+    train_data = pd.read_csv('/workspace/LAMP-PRo/Lamp/Training_with_Label_shuffled.csv')
+    test_data = pd.read_csv('/workspace/LAMP-PRo/Lamp/Validation_with_Label_shuffled.csv')
 
     save_embeddings_to_disk(
         "train",
@@ -155,10 +155,10 @@ if __name__ == '__main__':
 
     # Generate Embeddings for Test Datasets
     test_files = [
-        "Lamp/test_dataset_DRBP206_shuffled.csv",
-        "Lamp/test_dataset_EZL_shuffled.csv",
-        "Lamp/test_dataset_PDB255_shuffled.csv",
-        "Lamp/test_dataset_TEST474_shuffled.csv"
+        "/workspace/LAMP-PRo/Lamp/test_dataset_DRBP206_shuffled.csv",
+        "/workspace/LAMP-PRo/Lamp/test_dataset_EZL_shuffled.csv",
+        "/workspace/LAMP-PRo/Lamp/test_dataset_PDB255_shuffled.csv",
+        "/workspace/LAMP-PRo/Lamp/test_dataset_TEST474_shuffled.csv"
     ]
 
     for file in test_files:
