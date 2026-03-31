@@ -22,8 +22,12 @@ import matplotlib.patches as mpatches
 import matplotlib.colors as mcolors
 from sklearn.metrics import multilabel_confusion_matrix, classification_report
 import csv
+from tqdm.auto import tqdm
 
-from sklearn.metrics import accuracy_score, precision_score, recall_score, roc_auc_score, f1_score, matthews_corrcoef, average_precision_score
+from sklearn.metrics import (
+    accuracy_score, precision_score, recall_score,
+    roc_auc_score, f1_score, matthews_corrcoef, average_precision_score
+)
 
 def natural_sort_key(s):
     return [int(text) if text.isdigit() else text.lower() for text in re.split(r'(\d+)', s)]
@@ -35,7 +39,8 @@ def check_label_embedding_alignment(emb_dir, label_vectors):
 
     if len(files) != len(label_vectors):
         raise ValueError(
-            f"Number of embedding files ({len(files)}) does not match number of label vectors ({len(label_vectors)}).")
+            f"Number of embedding files ({len(files)}) does not match number of label vectors ({len(label_vectors)})."
+        )
 
     for idx, file in enumerate(files):
         expected = f"seq_{idx}.pt"
@@ -121,8 +126,8 @@ def visualize_combined_attention(
 
     plt.tight_layout(pad=3.0)
 
-    image_dir = os.path.expanduser(f'Lamp/visualization/{dataset_name}/images')
-    log_dir = os.path.expanduser(f'Lamp/visualization/{dataset_name}/log')
+    image_dir = os.path.expanduser(f'/workspace/LAMP-PRo/Lamp/visualization/{dataset_name}/images')
+    log_dir = os.path.expanduser(f'/workspace/LAMP-PRo/Lamp/visualization/{dataset_name}/log')
     os.makedirs(image_dir, exist_ok=True)
     os.makedirs(log_dir, exist_ok=True)
 
@@ -149,19 +154,21 @@ def invalid_label_penalty(y_pred_sigmoid, weight=0.1):
     return weight * penalties.mean()
 
 
-def predict(model, dataloader, device, save_to_csv=None, dataset_name=None):
+def predict(model, dataloader, device, save_to_csv=None, dataset_name=None, tokenizer=None):
     model.eval()
     predictions, probabilities, true_labels = [], [], []
 
+    pbar = tqdm(dataloader, desc=f"Predicting [{dataset_name}]", total=len(dataloader), leave=False)
     with torch.no_grad():
-        for i, (x, attention_mask, y, filenames, input_ids) in enumerate(dataloader):
+        for i, (x, attention_mask, y, filenames, input_ids) in enumerate(pbar):
             x = x.to(device)
             attention_mask = attention_mask.to(device)
             y = y.to(device)
             input_ids = input_ids.to(device)
 
             logits, attn_sa, label_weights = model(x, attention_mask=attention_mask, return_attn=True, labels=y)
-            if label_weights is not None:
+
+            if label_weights is not None and tokenizer is not None:
                 attn_maps = rescale_attention_weights(label_weights, attention_mask)
                 for j in range(x.size(0)):
                     attn_rescaled = attn_maps[j]
@@ -192,6 +199,11 @@ def predict(model, dataloader, device, save_to_csv=None, dataset_name=None):
             probabilities.extend(probs)
             true_labels.extend(y.cpu().numpy())
 
+            pbar.set_postfix({
+                "batch": f"{i + 1}/{len(dataloader)}",
+                "samples": len(predictions)
+            })
+
     predictions = np.array(predictions)
     probabilities = np.array(probabilities)
     true_labels = np.array(true_labels)
@@ -213,6 +225,7 @@ if __name__ == '__main__':
     np.random.seed(seed_val)
     torch.manual_seed(seed_val)
     torch.cuda.manual_seed_all(seed_val)
+
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     model_name = "facebook/esm2_t30_150M_UR50D"
@@ -220,28 +233,36 @@ if __name__ == '__main__':
     esm = AutoModel.from_pretrained(model_name)
 
     list_labels = [
-        "Lamp/test_dataset_TEST474_shuffled.csv",
-        "Lamp/test_dataset_DRBP206_shuffled.csv",
-        "Lamp/test_dataset_PDB255_shuffled.csv",
-        "Lamp/test_dataset_EZL_shuffled.csv"
+        "/workspace/LAMP-PRo/Lamp/test_dataset_TEST474_shuffled.csv",
+        "/workspace/LAMP-PRo/Lamp/test_dataset_DRBP206_shuffled.csv",
+        "/workspace/LAMP-PRo/Lamp/test_dataset_PDB255_shuffled.csv",
+        "/workspace/LAMP-PRo/Lamp/test_dataset_EZL_shuffled.csv"
     ]
 
     list_embeddings = [
-        "Lamp/embeddings/testing/TEST474",
-        "Lamp/embeddings/testing/DRBP206",
-        "Lamp/embeddings/testing/PDB255",
-        "Lamp/embeddings/testing/EZL"
+        "/workspace/LAMP-PRo/Lamp/embeddings/testing/TEST474",
+        "/workspace/LAMP-PRo/Lamp/embeddings/testing/DRBP206",
+        "/workspace/LAMP-PRo/Lamp/embeddings/testing/PDB255",
+        "/workspace/LAMP-PRo/Lamp/embeddings/testing/EZL"
     ]
 
     list_save = [
-        "Lamp/predictions/predictions_TEST474_FULL.csv",
-        "Lamp/predictions/predictions_DRBP206_FULL.csv",
-        "Lamp/predictions/predictions_PDB255_FULL.csv",
-        "Lamp/predictions/predictions_EZL_FULL.csv"
+        "/workspace/LAMP-PRo/Lamp/predictions/predictions_TEST474_FULL.csv",
+        "/workspace/LAMP-PRo/Lamp/predictions/predictions_DRBP206_FULL.csv",
+        "/workspace/LAMP-PRo/Lamp/predictions/predictions_PDB255_FULL.csv",
+        "/workspace/LAMP-PRo/Lamp/predictions/predictions_EZL_FULL.csv"
     ]
 
-    for i in range(len(list_labels)):
+    dataset_bar = tqdm(
+        range(len(list_labels)),
+        desc="Overall datasets",
+        total=len(list_labels)
+    )
+
+    for i in dataset_bar:
         dataset_name = os.path.basename(list_labels[i]).replace("test_dataset_", "").replace("_shuffled.csv", "")
+        dataset_bar.set_postfix({"dataset": dataset_name})
+
         test_data = pd.read_csv(list_labels[i], index_col=None)
         test_labels = test_data["label_vector"]
 
@@ -252,13 +273,18 @@ if __name__ == '__main__':
         test_loader = DataLoader(test_dataset, batch_size=32, shuffle=False, collate_fn=collate_fn)
 
         NeuralNetwork = ModelClassifier(in_channel=640, num_labels=3, use_mhsa=True)
-        NeuralNetwork.load_state_dict(torch.load("Lamp/BestModel.pt", map_location=device))
+        NeuralNetwork.load_state_dict(torch.load("/workspace/LAMP-PRo/Lamp/BestModel.pt", map_location=device))
         NeuralNetwork.to(device)
 
         check_label_embedding_alignment(test_embedding_dir, test_labels.tolist())
 
         preds, probs = predict(
-            NeuralNetwork, test_loader, device, save_to_csv=test_save_path, dataset_name=dataset_name
+            NeuralNetwork,
+            test_loader,
+            device,
+            save_to_csv=test_save_path,
+            dataset_name=dataset_name,
+            tokenizer=tokenizer
         )
 
         evaluate(test_save_path)
