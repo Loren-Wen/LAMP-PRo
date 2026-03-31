@@ -16,6 +16,7 @@ from script.FocalLoss import FocalLoss
 from torch.optim.lr_scheduler import StepLR
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 from torch.nn.utils.rnn import pad_sequence
+from tqdm import tqdm
 
 from sklearn.metrics import accuracy_score, precision_score, recall_score, roc_auc_score, f1_score, matthews_corrcoef, average_precision_score
 from sklearn.metrics import multilabel_confusion_matrix
@@ -133,12 +134,19 @@ def train(model, train_loader, val_loader, loss_fn, epochs=15, lr=1e-4, patience
     best_roc_auc = 0
     patience_counter = 0
 
-    for epoch in range(epochs):
+    # 外层 epoch 进度条
+    epoch_bar = tqdm(range(epochs), desc="Training", unit="epoch")
+
+    for epoch in epoch_bar:
         model.train()
         total_loss = 0
         train_logits, train_labels = [], []
 
-        for x, attention_mask, y, _, _ in train_loader:
+        # 内层 train batch 进度条
+        train_bar = tqdm(train_loader, desc=f"  Epoch {epoch + 1}/{epochs} [Train]",
+                         leave=False, unit="batch")
+
+        for x, attention_mask, y, _, _ in train_bar:
             x, attention_mask, y = x.to(device), attention_mask.to(device), y.to(device)
             optim.zero_grad()
             pred, _, _ = model(x, attention_mask=attention_mask, labels=y)
@@ -152,6 +160,11 @@ def train(model, train_loader, val_loader, loss_fn, epochs=15, lr=1e-4, patience
             train_logits.append(pred.detach())
             train_labels.append(y.detach())
 
+            # 实时在进度条后缀显示当前 batch loss
+            train_bar.set_postfix(loss=f"{loss.item():.4f}")
+
+        train_bar.close()
+
         train_logits = torch.cat(train_logits)
         train_labels = torch.cat(train_labels)
         train_metrics = compute_metrics(train_labels, train_logits)
@@ -159,11 +172,19 @@ def train(model, train_loader, val_loader, loss_fn, epochs=15, lr=1e-4, patience
         model.eval()
         with torch.no_grad():
             all_logits, all_labels = [], []
-            for x, attention_mask, y, _, _ in val_loader:
+
+            # 内层 val batch 进度条
+            val_bar = tqdm(val_loader, desc=f"  Epoch {epoch + 1}/{epochs} [Val]  ",
+                           leave=False, unit="batch")
+
+            for x, attention_mask, y, _, _ in val_bar:
                 x, attention_mask, y = x.to(device), attention_mask.to(device), y.to(device)
                 logit, _, _ = model(x, attention_mask=attention_mask, labels=y)
                 all_logits.append(logit.detach())
                 all_labels.append(y.detach())
+
+            val_bar.close()
+
             logits = torch.cat(all_logits)
             labels = torch.cat(all_labels)
             val_metrics = compute_metrics(labels, logits)
@@ -171,20 +192,28 @@ def train(model, train_loader, val_loader, loss_fn, epochs=15, lr=1e-4, patience
         roc_auc = val_metrics["roc_auc"]
         scheduler.step(roc_auc)
 
-        print(f"Epoch {epoch + 1} - Loss: {total_loss / len(train_loader):.4f} | "
+        # 更新外层 epoch 进度条后缀，展示核心指标
+        epoch_bar.set_postfix(
+            loss=f"{total_loss / len(train_loader):.4f}",
+            val_f1=f"{val_metrics['f1_macro']:.4f}",
+            val_auc=f"{roc_auc:.4f}",
+            val_mcc=f"{val_metrics['mcc']:.4f}",
+        )
+
+        print(f"\nEpoch {epoch + 1} - Loss: {total_loss / len(train_loader):.4f} | "
               f"F1: {val_metrics['f1_macro']:.4f} | Acc: {val_metrics['subset_accuracy']:.4f} | MCC: {val_metrics['mcc']:.4f}")
-        print(f"Train Loss   : {total_loss / len(train_loader):.4f}")
+        print(f"Train Loss   : {total_loss / len(train_loader):.4f}")
         print(f"Train Metrics: F1={train_metrics['f1_macro']:.4f}, "
               f"Subset Acc={train_metrics['subset_accuracy']:.4f}, "
               f"Hamming Acc={train_metrics['hamming_accuracy']:.4f}, "
               f"MCC={train_metrics['mcc']:.4f}, "
               f"AUC={train_metrics['roc_auc']:.4f}, PR_AUC={train_metrics['pr_auc']:.4f}")
-        print(f"Val  Metrics: F1={val_metrics['f1_macro']:.4f}, "
+        print(f"Val  Metrics: F1={val_metrics['f1_macro']:.4f}, "
               f"Subset Acc={val_metrics['subset_accuracy']:.4f}, "
               f"Hamming Acc={val_metrics['hamming_accuracy']:.4f}, "
               f"MCC={val_metrics['mcc']:.4f}, "
               f"AUC={val_metrics['roc_auc']:.4f}, PR_AUC={val_metrics['pr_auc']:.4f}")
-        print(f"F1 Scores  → DBP: {val_metrics['f1_DBP']:.4f}, RBP: {val_metrics['f1_RBP']:.4f}, "
+        print(f"F1 Scores  → DBP: {val_metrics['f1_DBP']:.4f}, RBP: {val_metrics['f1_RBP']:.4f}, "
               f"DRBP: {val_metrics['f1_DRBP']:.4f}, Neither: {val_metrics['f1_Neither']:.4f}")
         print(f"AUC Scores → DBP: {val_metrics['auc_DBP']:.4f}, RBP: {val_metrics['auc_RBP']:.4f}, "
               f"DRBP: {val_metrics['auc_DRBP']:.4f}, Neither: {val_metrics['auc_Neither']:.4f}")
@@ -192,12 +221,16 @@ def train(model, train_loader, val_loader, loss_fn, epochs=15, lr=1e-4, patience
         if roc_auc > best_roc_auc:
             best_roc_auc = roc_auc
             patience_counter = 0
-            torch.save(model.state_dict(), os.path.join("Lamp/BestModel.pt")) 
+            torch.save(model.state_dict(), os.path.join("/workspace/LAMP-PRo/Lamp/BestModel.pt"))
+            tqdm.write(f"  ✓ New best model saved (AUC={best_roc_auc:.4f})")
         else:
             patience_counter += 1
+            tqdm.write(f"  No improvement. Patience: {patience_counter}/{patience}")
             if patience_counter >= patience:
-                print(f"Early stopping triggered at epoch {epoch + 1}")
+                tqdm.write(f"Early stopping triggered at epoch {epoch + 1}")
                 break
+
+    epoch_bar.close()
 
 
 if __name__ == '__main__':
@@ -212,24 +245,23 @@ if __name__ == '__main__':
     tokenizer = AutoTokenizer.from_pretrained(model_name)
     esm = AutoModel.from_pretrained(model_name)
 
-    train_data = pd.read_csv('Lamp/Training_with_Label_shuffled.csv', index_col=None)
-    test_data = pd.read_csv('Lamp/Validation_with_Label_shuffled.csv', index_col=None)
+    train_data = pd.read_csv('/workspace/LAMP-PRo/Lamp/Training_with_Label_shuffled.csv', index_col=None)
+    test_data = pd.read_csv('/workspace/LAMP-PRo/Lamp/Validation_with_Label_shuffled.csv', index_col=None)
 
     train_labels = train_data["label_vector"]
     test_labels = test_data["label_vector"]
 
-   
-    train_embedding_dir = os.path.expanduser('Lamp/embeddings/training/train')
-    test_embedding_dir = os.path.expanduser('Lamp/embeddings/training/test')
-    
+    train_embedding_dir = os.path.expanduser('/workspace/LAMP-PRo/Lamp/embeddings/training/train')
+    test_embedding_dir = os.path.expanduser('/workspace/LAMP-PRo/Lamp/embeddings/training/test')
+
     check_label_embedding_alignment(train_embedding_dir, train_labels.tolist())
     check_label_embedding_alignment(test_embedding_dir, test_labels.tolist())
 
     train_dataset = MyDataset(embedding_dir=train_embedding_dir, label_vectors=train_labels)
     test_dataset = MyDataset(embedding_dir=test_embedding_dir, label_vectors=test_labels)
 
-    train_loader = DataLoader(train_dataset, batch_size=32, shuffle=True, collate_fn=collate_fn)
-    test_loader = DataLoader(test_dataset, batch_size=32, shuffle=False, collate_fn=collate_fn)
+    train_loader = DataLoader(train_dataset, batch_size=16, shuffle=True, collate_fn=collate_fn)
+    test_loader = DataLoader(test_dataset, batch_size=16, shuffle=False, collate_fn=collate_fn)
 
     input_channel = 640
     NeuralNetwork = ModelClassifier(in_channel=640, num_labels=3, use_mhsa=True)
