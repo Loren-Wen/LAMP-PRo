@@ -40,17 +40,17 @@ def evaluate(path):
 
     classes = ['DBP', 'RBP', 'DRBP', 'neither']
     for c in classes:
-        print(f"\n===== {c} vs Rest =====")
+        # print(f"\n===== {c} vs Rest =====")
         y_true_binary = (df['actual_class'] == c)
         y_pred_binary = (df['pred_class'] == c)
         cm = confusion_matrix(y_true_binary, y_pred_binary)
-        print("Confusion Matrix:")
-        print(cm)
+        # print("Confusion Matrix:")
+        # print(cm)
 
         acc = accuracy_score(y_true_binary, y_pred_binary)
         mcc = matthews_corrcoef(y_true_binary, y_pred_binary)
-        print(f"Accuracy: {acc:.4f}")
-        print(f"MCC     : {mcc:.4f}")
+        # print(f"Accuracy: {acc:.4f}")
+        # print(f"MCC     : {mcc:.4f}")
 
     # --- 2. AUC & 1-AURC ---
     DBP_IDX, RBP_IDX = 0, 1
